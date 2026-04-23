@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Classroom Messenger</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <main id="enter" class="view">
+    <h1>Classroom Messenger</h1>
+    <p class="subtitle">Bitte Namen eingeben, um den Chat zu betreten.</p>
+    <form id="enterForm" novalidate>
+      <input
+        id="nameInput"
+        type="text"
+        maxlength="40"
+        autocomplete="off"
+        placeholder="Dein Name"
+        required
+      >
+      <button type="submit">Beitreten</button>
+    </form>
+    <p id="enterError" class="error" hidden>Ein leerer Name ist nicht erlaubt.</p>
+  </main>
+
+  <main id="chat" class="view" hidden>
+    <header class="chat-header">
+      <h1 id="chatTitle">Classroom Messenger</h1>
+      <p id="status" class="status">connecting...</p>
+    </header>
+
+    <section id="log" class="messages" role="log" aria-live="polite"></section>
+
+    <form id="postForm" class="composer">
+      <input
+        id="textInput"
+        type="text"
+        maxlength="1000"
+        autocomplete="off"
+        placeholder="Nachricht"
+        required
+      >
+      <button type="submit">Senden</button>
+    </form>
+  </main>
+
+  <script>
+    (() => {
+      const enterView = document.getElementById("enter");
+      const chatView = document.getElementById("chat");
+      const enterForm = document.getElementById("enterForm");
+      const postForm = document.getElementById("postForm");
+      const nameInput = document.getElementById("nameInput");
+      const textInput = document.getElementById("textInput");
+      const chatTitle = document.getElementById("chatTitle");
+      const log = document.getElementById("log");
+      const statusEl = document.getElementById("status");
+      const enterError = document.getElementById("enterError");
+
+      const MAX_RETRIES = 10;
+      const RECONNECT_DELAY_MS = 2000;
+      const SCROLL_EPS = 4;
+
+      let ws = null;
+      let myName = "";
+      let retryCount = 0;
+      let gaveUp = false;
+
+      function isAtBottom() {
+        return log.scrollHeight - log.clientHeight - log.scrollTop <= SCROLL_EPS;
+      }
+
+      function formatHHMM(ts) {
+        const dt = new Date((ts || Date.now() / 1000) * 1000);
+        return dt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
+      }
+
+      function addMessage(name, text, ts) {
+        const keepBottom = isAtBottom();
+
+        const row = document.createElement("article");
+        row.className = "message";
+
+        const header = document.createElement("header");
+        const who = document.createElement("strong");
+        who.textContent = name;
+        const when = document.createElement("time");
+        when.textContent = formatHHMM(ts);
+        header.append(who, when);
+
+        const body = document.createElement("p");
+        body.textContent = text;
+
+        row.append(header, body);
+        log.appendChild(row);
+
+        if (keepBottom) {
+          log.scrollTop = log.scrollHeight;
+        }
+      }
+
+      function setStatus(text, offline) {
+        statusEl.textContent = text;
+        statusEl.classList.toggle("offline", Boolean(offline));
+      }
+
+      function connect() {
+        setStatus("connecting...", false);
+        const proto = location.protocol === "https:" ? "wss" : "ws";
+        const url = `${proto}://${location.host}/ws?name=${encodeURIComponent(myName)}`;
+        ws = new WebSocket(url);
+
+        ws.onopen = () => {
+          retryCount = 0;
+          setStatus(`connected as ${myName}`, false);
+        };
+
+        ws.onmessage = (event) => {
+          let frame;
+          try {
+            frame = JSON.parse(event.data);
+          } catch (err) {
+            return;
+          }
+
+          if (!frame || frame.type !== "message" || !frame.message) {
+            return;
+          }
+
+          const msg = frame.message;
+          addMessage(msg.name || "anon", msg.text || "", msg.ts);
+        };
+
+        ws.onclose = () => {
+          if (gaveUp) {
+            return;
+          }
+
+          if (retryCount >= MAX_RETRIES) {
+            gaveUp = true;
+            setStatus("offline - bitte Seite neu laden", true);
+            return;
+          }
+
+          retryCount += 1;
+          setStatus(`reconnecting (${retryCount}/${MAX_RETRIES})...`, true);
+          window.setTimeout(connect, RECONNECT_DELAY_MS);
+        };
+
+        ws.onerror = () => {
+          try {
+            ws.close();
+          } catch (err) {
+            // Ignore close errors on broken sockets.
+          }
+        };
+      }
+
+      enterForm.addEventListener("submit", (event) => {
+        event.preventDefault();
+        const cleanName = nameInput.value.trim().slice(0, 40);
+        if (!cleanName) {
+          enterError.hidden = false;
+          nameInput.focus();
+          return;
+        }
+
+        enterError.hidden = true;
+        myName = cleanName;
+        chatTitle.textContent = `Classroom Messenger - ${myName}`;
+        enterView.hidden = true;
+        chatView.hidden = false;
+        textInput.focus();
+        connect();
+      });
+
+      postForm.addEventListener("submit", (event) => {
+        event.preventDefault();
+        const text = textInput.value.trim();
+        if (!text || !ws || ws.readyState !== WebSocket.OPEN) {
+          return;
+        }
+
+        ws.send(JSON.stringify({ type: "post", text }));
+        textInput.value = "";
+      });
+    })();
+  </script>
+</body>
+</html>

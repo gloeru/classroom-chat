@@ -1,0 +1,8 @@
+@startuml user-actions
+left to right direction
+
+actor "Teilnehmende:r"  as User
+actor "Render-Plattform" as Render
+
+rectangle "Classroom Messenger" {
+  usecase "UC-1 Raum betreten"                 as UC1

@@ -1,0 +1,12 @@
+@startuml classes
+class State {
+  lock : Lock
+  clients : dict<WS, str>
+}
+
+class Message <<wire format>> {
+  name : str
+  text : str
+  ts : float
+}
+@enduml

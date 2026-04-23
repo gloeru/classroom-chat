@@ -1,0 +1,9 @@
+@startuml architecture
+actor Browser
+node "Render Web Service" {
+  [Flask + flask-sock] as App
+  database "clients (dict)" as C
+}
+Browser -- App : HTTPS / WSS
+App -- C
+@enduml

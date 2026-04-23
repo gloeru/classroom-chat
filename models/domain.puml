@@ -1,0 +1,17 @@
+@startuml domain
+title Classroom Messenger — Domänenmodell (DDD Schritt 1)
+
+class Classroom
+
+class Participant {
+  name : String  [1..40]
+}
+
+class Message {
+  text : String  [1..1000]
+  postedAt : Instant
+}
+
+Classroom "1" *-- "0..*" Participant  : has >
+Participant "1" -- "0..*" Message     : authors >
+@enduml

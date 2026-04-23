@@ -1,0 +1,9 @@
+@startuml post-message
+actor Alice
+actor Bob
+participant Server
+
+Alice -> Server : post "Hello"
+Server -> Alice : message
+Server -> Bob   : message
+@enduml
