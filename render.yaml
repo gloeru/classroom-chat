@@ -3,5 +3,5 @@ services:
     name: simple-messenger
     runtime: python
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn -w 1 -k gthread --threads 16 -b 0.0.0.0:$PORT app:app
+    startCommand: gunicorn -w 1 -k gthread --threads 16 --timeout 0 -b 0.0.0.0:$PORT app:app
     healthCheckPath: /healthz

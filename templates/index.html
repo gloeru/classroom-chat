@@ -60,12 +60,32 @@
 
       const MAX_RETRIES = 10;
       const RECONNECT_DELAY_MS = 2000;
+      const HEARTBEAT_MS = 25000;
       const SCROLL_EPS = 4;
 
       let ws = null;
       let myName = "";
       let retryCount = 0;
       let gaveUp = false;
+      let heartbeatTimer = null;
+
+      function stopHeartbeat() {
+        if (!heartbeatTimer) {
+          return;
+        }
+        window.clearInterval(heartbeatTimer);
+        heartbeatTimer = null;
+      }
+
+      function startHeartbeat() {
+        stopHeartbeat();
+        heartbeatTimer = window.setInterval(() => {
+          if (!ws || ws.readyState !== WebSocket.OPEN) {
+            return;
+          }
+          ws.send(JSON.stringify({ type: "ping" }));
+        }, HEARTBEAT_MS);
+      }
 
       function isAtBottom() {
         return log.scrollHeight - log.clientHeight - log.scrollTop <= SCROLL_EPS;
@@ -113,6 +133,7 @@
 
         ws.onopen = () => {
           retryCount = 0;
+          startHeartbeat();
           setStatus(`connected as ${myName}`, false);
         };
 
@@ -125,6 +146,9 @@
           }
 
           if (!frame || frame.type !== "message" || !frame.message) {
+            if (frame && frame.type === "pong") {
+              return;
+            }
             return;
           }
 
@@ -133,6 +157,8 @@
         };
 
         ws.onclose = () => {
+          stopHeartbeat();
+
           if (gaveUp) {
             return;
           }
@@ -149,6 +175,7 @@
         };
 
         ws.onerror = () => {
+          stopHeartbeat();
           try {
             ws.close();
           } catch (err) {

@@ -32,7 +32,7 @@ Dann `http://localhost:5000` öffnen.
 
 - `render.yaml` ist bereits enthalten (Blueprint-Deployment).
 - Build command: `pip install -r requirements.txt`
-- Start command: `gunicorn -w 1 -k gthread --threads 16 -b 0.0.0.0:$PORT app:app`
+- Start command: `gunicorn -w 1 -k gthread --threads 16 --timeout 0 -b 0.0.0.0:$PORT app:app`
 - Health check: `/healthz`
 - Python-Version: siehe `runtime.txt`
 

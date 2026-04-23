@@ -81,7 +81,18 @@ def ws_handler(ws):
             except (TypeError, ValueError):
                 continue
 
-            if not isinstance(frame, dict) or frame.get("type") != "post":
+            if not isinstance(frame, dict):
+                continue
+
+            frame_type = frame.get("type")
+            if frame_type == "ping":
+                try:
+                    ws.send(json.dumps({"type": "pong", "ts": time.time()}))
+                except Exception:
+                    break
+                continue
+
+            if frame_type != "post":
                 continue
 
             text = _clean(str(frame.get("text", "")), MAX_TEXT_LEN)
