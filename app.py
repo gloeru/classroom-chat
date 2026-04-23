@@ -1,70 +1,57 @@
-from __future__ import annotations
-
 import json
+import threading
 import time
-from threading import Lock
-from typing import Any
 
 from flask import Flask, render_template, request
 from flask_sock import Sock
-
-MAX_TEXT_LEN = 1000
-MAX_NAME_LEN = 40
-
-
-class State:
-    def __init__(self) -> None:
-        self.lock = Lock()
-        self.clients: dict[Any, str] = {}
-
-
-state = State()
 
 app = Flask(__name__)
 sock = Sock(app)
 
 
-@app.get("/")
-def index():
-    return render_template("index.html")
+class _State:
+    def __init__(self):
+        self.lock = threading.Lock()
+        self.clients: dict = {}  # socket -> display name
 
 
-@app.get("/healthz")
-def healthz():
-    return "ok", 200
+state = _State()
 
 
 def _clean(value: str, limit: int) -> str:
-    return (value or "").strip()[:limit]
+    return value.strip()[:limit]
 
 
-def _broadcast(payload: dict[str, Any]) -> None:
-    data = json.dumps(payload)
+def _broadcast(payload: str):
     dead = []
-
     with state.lock:
         targets = list(state.clients.keys())
-
     for ws in targets:
         try:
-            ws.send(data)
+            ws.send(payload)
         except Exception:
             dead.append(ws)
-
     if dead:
         with state.lock:
             for ws in dead:
                 state.clients.pop(ws, None)
 
 
+@app.route("/")
+def index():
+    return render_template("index.html")
+
+
+@app.route("/healthz")
+def healthz():
+    return "ok", 200
+
+
 @sock.route("/ws")
 def ws_handler(ws):
-    name = _clean(request.args.get("name", ""), MAX_NAME_LEN)
+    name = _clean(request.args.get("name", ""), 40)
     if not name:
-        try:
-            ws.close()
-        except Exception:
-            pass
+        ws.close()
         return
 
     with state.lock:
@@ -72,39 +59,20 @@ def ws_handler(ws):
 
     try:
         while True:
-            raw = ws.receive()
-            if raw is None:
+            data = ws.receive()
+            if data is None:
                 break
-
             try:
-                frame = json.loads(raw)
-            except (TypeError, ValueError):
+                frame = json.loads(data)
+            except (ValueError, TypeError):
                 continue
-
-            if not isinstance(frame, dict):
+            if frame.get("type") != "post":
                 continue
-
-            frame_type = frame.get("type")
-            if frame_type == "ping":
-                try:
-                    ws.send(json.dumps({"type": "pong", "ts": time.time()}))
-                except Exception:
-                    break
-                continue
-
-            if frame_type != "post":
-                continue
-
-            text = _clean(str(frame.get("text", "")), MAX_TEXT_LEN)
+            text = _clean(str(frame.get("text", "")), 1000)
             if not text:
                 continue
-
             msg = {"name": name, "text": text, "ts": time.time()}
-            _broadcast({"type": "message", "message": msg})
+            _broadcast(json.dumps({"type": "message", "message": msg}))
     finally:
         with state.lock:
             state.clients.pop(ws, None)
-
-
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True)

@@ -21,7 +21,7 @@ git push -u origin main
 
 Render verwendet:
 - Build: `pip install -r requirements.txt`
-- Start: `gunicorn -w 1 -k gthread --threads 16 --timeout 0 -b 0.0.0.0:$PORT app:app`
+- Start: `gunicorn -w 1 -k gevent --worker-connections 1000 --timeout 0 -b 0.0.0.0:$PORT app:app`
 - Health Check: `/healthz`
 
 ## 3) Build und Start validieren
